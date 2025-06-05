@@ -1,0 +1,1 @@
+from .controller import Fr3Controller

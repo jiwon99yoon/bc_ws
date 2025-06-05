@@ -1,0 +1,25 @@
+<mujoco model="fr3_w_hand">
+
+    <include file="common/assets.xml"/>
+    <include file="common/sensor.xml"/>
+    <include file="fr3/assets.xml"/>
+    <include file="franka_hand/assets.xml"/>
+
+    <include file = 'fr3/actuator.xml'/>
+    <include file = 'franka_hand/actuator.xml'/>
+
+    <worldbody>
+        <include file="common/scene.xml" />    
+        <include file="fr3/fr3_hand_urdf.xml" />   
+
+        <!-- <body name="table" pos="0.6 0 0.3" euler="0 0 1.5707963267948966">
+            <include file="common/table.xml"/>
+        </body>  -->
+
+
+    <!-- <camera name="top_down_cam" pos="0.8 0.0 0.8" euler="0 0.7854 1.570796326794897" mode="fixed" fovy="74.3"/>
+        <geom type="box" pos="0.8 0.0 0.8" euler="0 0.7854 1.570796326794897" size ="0.09 0.025 0.025"/> -->
+
+    </worldbody>
+
+</mujoco>

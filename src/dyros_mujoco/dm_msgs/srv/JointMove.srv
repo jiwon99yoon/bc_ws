@@ -1,0 +1,6 @@
+sensor_msgs/JointState joint
+float32 duration
+---
+bool is_received
+
+

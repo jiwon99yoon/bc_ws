@@ -1,0 +1,12 @@
+<mujocoinclude>
+
+  <equality>
+    <joint joint1="finger_joint1" joint2="finger_joint2" solimp="0.95 0.99 0.001" solref="0.005 1"/>
+  </equality>
+
+  <actuator>
+      <motor class="franka_hand" name="finger_joint1" joint="finger_joint1" ctrlrange="-100 100"/>
+      <motor class="franka_hand" name="finger_joint2" joint="finger_joint2" ctrlrange="-100 100"/>
+  </actuator>
+
+</mujocoinclude>
