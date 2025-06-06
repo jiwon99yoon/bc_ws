@@ -93,8 +93,7 @@ void ArmController::compute(const std::shared_ptr<GoalHandleJT> goal_handle)
     const auto goal = goal_handle->get_goal();
 
     rclcpp::Time currentTime;
-    float passedTime;
-
+    double passedTime; // float -> double로 변경
     auto feedback = std::make_shared<JT::Feedback>();
     auto result = std::make_shared<JT::Result>();
 
@@ -102,7 +101,7 @@ void ArmController::compute(const std::shared_ptr<GoalHandleJT> goal_handle)
     feedback->actual.positions.resize(as_joint_size);
     feedback->actual.velocities.resize(as_joint_size);
     feedback->actual.accelerations.resize(as_joint_size);
-
+    rclcpp::Rate loop_rate(100); // 100Hz # 100hz이상 올라가가지 않게 제어 - mujoco 렉
     while(rclcpp::ok())
     {
         if(!goal_handle->is_active())
@@ -119,23 +118,51 @@ void ArmController::compute(const std::shared_ptr<GoalHandleJT> goal_handle)
 
             Eigen::Vector3d position_now;            
             for(int j=0;j<as_joint_size;j++){ // j = joint number
+                
                 for(int i=0;i<point_size-1;i++){
-                    if((passedTime>=goal->trajectory.points[i].time_from_start.sec)&&(passedTime<goal->trajectory.points[i+1].time_from_start.sec)){
-                        position_now=QuinticSpline(passedTime,goal->trajectory.points[i].time_from_start.sec, goal->trajectory.points[i+1].time_from_start.sec,
-                        goal->trajectory.points[i].positions[j],goal->trajectory.points[i].velocities[j],goal->trajectory.points[i].accelerations[j],
-                        goal->trajectory.points[i+1].positions[j],goal->trajectory.points[i+1].velocities[j],goal->trajectory.points[i+1].accelerations[j]);
-                    }                    
-                }
+                    // 초단위 update to mujoco
+                    //  if((passedTime>=goal->trajectory.points[i].time_from_start.sec)&&(passedTime<goal->trajectory.points[i+1].time_from_start.sec))
+                    //  {
+                    //      position_now=QuinticSpline(passedTime,goal->trajectory.points[i].time_from_start.sec, goal->trajectory.points[i+1].time_from_start.sec,
+                    //      goal->trajectory.points[i].positions[j],goal->trajectory.points[i].velocities[j],goal->trajectory.points[i].accelerations[j],
+                    //      goal->trajectory.points[i+1].positions[j],goal->trajectory.points[i+1].velocities[j],goal->trajectory.points[i+1].accelerations[j]);
+                    //  }            
+                    // trajectory i 의 time_from_start (sec, nanosec)
+                    const auto &pt_i  = goal->trajectory.points[i].time_from_start;
+                    const auto &pt_i1 = goal->trajectory.points[i+1].time_from_start;
 
+                    // “double t_i = sec_i + nanosec_i * 1e-9”
+                    double t_i  = static_cast<double>(pt_i.sec)
+                                 + static_cast<double>(pt_i.nanosec) * 1e-9;
+                    double t_i1 = static_cast<double>(pt_i1.sec)
+                                 + static_cast<double>(pt_i1.nanosec) * 1e-9;
+                    // passedTime(이미 소수점 이하 포함) 과 비교
+                    if (passedTime >= t_i && passedTime < t_i1) {
+                        // trajectory i, i+1 의 위치·속도·가속도 할당
+                        double pos_i   = goal->trajectory.points[i]  .positions[j];
+                        double vel_i   = goal->trajectory.points[i]  .velocities[j];
+                        double acc_i   = goal->trajectory.points[i]  .accelerations[j];
+                        double pos_i1  = goal->trajectory.points[i+1].positions[j];
+                        double vel_i1  = goal->trajectory.points[i+1].velocities[j];
+                        double acc_i1  = goal->trajectory.points[i+1].accelerations[j];
+
+                        position_now = QuinticSpline(passedTime,  // 현재 시간(초 실수, nanosec 포함)
+                            t_i,         // i 구간 시작 시간
+                            t_i1,        // i+1 구간 끝 시간
+                            pos_i, vel_i, acc_i,        // pos_i, vel_i, acc_i 는 i 구간의 위치·속도·가속도
+                            pos_i1, vel_i1, acc_i1      // pos_i1, vel_i1, acc_i1 는 i+1 구간의 위치·속도·가속도
+                        );
+                        break; 
+                    }                      
+                }
                 feedback->joint_names = goal->trajectory.joint_names;                
                 feedback->actual.positions[j] = position_now(0);                
                 feedback->actual.velocities[j] = position_now(1);
                 feedback->actual.accelerations[j] = position_now(2);
 
                 joint_command_msg.position[j]=position_now(0);
-                joint_command_pub->publish(joint_command_msg);
             }            
-
+            joint_command_pub->publish(joint_command_msg); //기존 for loop에서 publish를 하지 않고, 계산된 결과 pub
             feedback -> actual.time_from_start= currentTime - goal_start_time;
             feedback -> header.stamp.sec = feedback_header_stamp_;            
             feedback_header_stamp_++;    
@@ -149,6 +176,7 @@ void ArmController::compute(const std::shared_ptr<GoalHandleJT> goal_handle)
             goal_handle->succeed(result);
             RCLCPP_INFO(this->get_logger(), "Arm goal succeeded");
         }
+        loop_rate.sleep(); //100hz 이상 올라가지않게 제어
     }
 }
 
@@ -179,13 +207,13 @@ GripperController::~GripperController(){};
 void GripperController::compute(const std::shared_ptr<GoalHandleGC> goal_handle)
 {
     RCLCPP_INFO(this->get_logger(), "Executing gripper goal");
-    // rclcpp::Rate loop_rate(1);
+    //rclcpp::Rate loop_rate(1);
     const auto goal = goal_handle->get_goal();
     auto result = std::make_shared<GC::Result>();
 
     rclcpp::Time currentTime;
     float passedTime;
-
+    rclcpp::Rate loop_rate(100); // 100Hz # 100hz이상 올라가가지 않게 제어
     while(rclcpp::ok())
     {
         if(!goal_handle->is_active())
@@ -208,5 +236,6 @@ void GripperController::compute(const std::shared_ptr<GoalHandleGC> goal_handle)
             goal_handle->succeed(result);
             RCLCPP_INFO(this->get_logger(), "Goal succeeded");
         }
+        loop_rate.sleep(); //100hz 이상 올라가지않게 제어
     }
 }

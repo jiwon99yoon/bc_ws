@@ -3,9 +3,9 @@ from dm_msgs.srv import TaskMove, JointMove
 import numpy as np
 from std_msgs.msg import Bool
 from geometry_msgs.msg import Pose
-from sensor_msgs.msg import JointState
+# from sensor_msgs.msg import JointState
 from rclpy.node import Node
-from scipy.spatial.transform import Rotation as R
+from scipy.spatial.transform import Rotation as Rs
 
 class JointMoveServer(Node):
     def __init__(self):

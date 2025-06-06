@@ -36,9 +36,19 @@ class MujocoROSBridge(Node):
         self.sm = SceneMonitor(self.model, self.data)
         self.hand_eye = MujocoCameraBridge(self.model, camera_info)
       
-        self.ctrl_dof = 8 # 7 + 1
+        self.ctrl_dof = 8 # 7 + 1 <- mujoco urdf엔 9개나, controller에서 8개로 계산하기 때문
         self.ctrl_step = 0
-
+        
+        '''
+        #   각각의 qpos index에 해당하는 joint 이름을 출력해 봅시다.
+        print(f"[Bridge] MuJoCo model.nq = {self.model.nq}")
+        for i in range(self.model.nq):
+            # mj_id2name(model, object_type, object_id) → joint 이름 반환
+            name = mujoco.mj_id2name(self.model, mujoco.mjtObj.mjOBJ_JOINT, i)
+            print(f"[Bridge] qpos index {i} -> joint name = {name}")
+        # ↑↑↑ 여기까지 삽입 ↑↑↑
+        # ──────────────────────────────────────────────────────────────────────────
+        '''
         ''' 일단 publish 관련 코드 주석처리
         # 퍼블리시 주기 제어용 변수
         self.publish_rate_hz = 100  # 예: 100Hz로 퍼블리시
@@ -55,11 +65,11 @@ class MujocoROSBridge(Node):
         self.moveit_joint_names = []
         for i in range(1, 8):
             self.moveit_joint_names.append(f"panda_joint{i}")
-        self.moveit_joint_names.append("panda_gripper_joint")
-        
+        self.moveit_joint_names.append("panda_finger_joint1")
         '''
 
         # moveit -> /panda/joint_set을 받기 위한 subscription 변수
+        # moveit_sim_interface에서 moveit이 보낸 joint_set 메세지: /panda/joint_set :  현재 panda로 되어있음
         self.latest_joint_set = None
         self.joint_set_mutex = threading.Lock()
         self.joint_set_sub = self.create_subscription(
@@ -70,10 +80,13 @@ class MujocoROSBridge(Node):
         )
 
         # MuJoCo qpos 순서와 1:1 매핑되는 moveit_joint 이름들
+        # 1에서 7까지로 되어있음. 
         self.mujoco_joint_names = []
         for i in range(1, 8):
             self.mujoco_joint_names.append(f"fr3_joint{i}")
-        self.mujoco_joint_names.append("fr3_gripper_joint")
+        # panda는 joint 정보 7개만 보냄
+        # self.mujoco_joint_names.append("finger_joint1")
+        # finger_joint1으로 설정 - franka_hand_urdf.xml #finger_joint2도 있긴함
 
         self.running = True
         self.lock = threading.Lock()
@@ -132,6 +145,7 @@ class MujocoROSBridge(Node):
                     self.data.ctrl[:self.ctrl_dof] = self.rc.compute()   
                     '''
                     # moveit이 보낸 /panda/joint_set 메세지 존재 여부 검사 - 있으면 그 값을 qpos로 덮어쓰기
+                    
                     target_js = None
                     with self.joint_set_mutex:
                         if self.latest_joint_set is not None:
@@ -146,9 +160,12 @@ class MujocoROSBridge(Node):
                                 self.data.qpos[i] = float(target_js.position[i])
                             except:
                                 pass
+                        self.data.qpos[7] = 0.04
+                        self.data.qpos[8] = 0.04
                         # mujoco 시뮬레이션 한 스텝
-                        mujoco.my_step(self.model, self.data)  # 시뮬레이션 실행
-                        self.rc.updateModel(self.data, self.ctrl_step)  #시뮬레이터 내부 상태를 DMController에 업데이트 
+                        mujoco.mj_step(self.model, self.data)  # 시뮬레이션 실행
+                        #self.rc.updateModel(self.data, self.ctrl_step)  #시뮬레이터 내부 상태를 DMController에 업데이트 
+                    
                     else:
                         # moveit이 보낸 궤적이 없으면, 로봇 컨트롤러에서 계산한 값을 qpos로 덮어쓰기
                         mujoco.mj_step(self.model, self.data)  # 시뮬레이션 실행
@@ -219,10 +236,11 @@ class MujocoROSBridge(Node):
             print(f'Time {elapsed_time*1000:.4f} + {sleep_time*1000:.4f} = {(elapsed_time + sleep_time)*1000} ms')
     
     def ros_control(self):
-        executor = MultiThreadedExecutor(num_threads=3)
+        executor = MultiThreadedExecutor(num_threads=4)
         executor.add_node(self.rc.tm)
-        executor.add_node(self.rc.jm)
-        executor.add_node(self.hand_eye)
+        executor.add_node(self.rc.jm) 
+        executor.add_node(self.hand_eye)  
+        executor.add_node(self)        # MujocoROSBridge 자신도 spin대상에 포함 
         executor.spin()
         executor.shutdown()
 
