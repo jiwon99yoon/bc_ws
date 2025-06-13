@@ -1,6 +1,6 @@
 from moveit_configs_utils import MoveItConfigsBuilder
 from moveit_configs_utils.launches import generate_demo_launch
-
+# from launch import LaunchDescription
 
 def generate_launch_description():
     moveit_config = MoveItConfigsBuilder("panda", package_name="panda_moveit_config").to_moveit_configs()
