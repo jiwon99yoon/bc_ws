@@ -39,37 +39,30 @@ class MujocoROSBridge(Node):
         self.ctrl_dof = 8 # 7 + 1 <- mujoco urdf엔 9개나, controller에서 8개로 계산하기 때문
         self.ctrl_step = 0
         
-        '''
-        #   각각의 qpos index에 해당하는 joint 이름을 출력해 봅시다.
-        print(f"[Bridge] MuJoCo model.nq = {self.model.nq}")
-        for i in range(self.model.nq):
-            # mj_id2name(model, object_type, object_id) → joint 이름 반환
-            name = mujoco.mj_id2name(self.model, mujoco.mjtObj.mjOBJ_JOINT, i)
-            print(f"[Bridge] qpos index {i} -> joint name = {name}")
-        # ↑↑↑ 여기까지 삽입 ↑↑↑
-        # ──────────────────────────────────────────────────────────────────────────
-        '''
         ''' 일단 publish 관련 코드 주석처리
         # 퍼블리시 주기 제어용 변수
         self.publish_rate_hz = 100  # 예: 100Hz로 퍼블리시
         self.publish_skip_count = int(self.ctrl_freq / self.publish_rate_hz)
         self._step_counter = 0
         '''
-        '''
+        
+        # # 이름 바꿔서 하기! (moveit은 /joint_states 의 정보 8개를 입력받음)
         # JoinstState publisher 생성 -> moveit으로 joint 정보 퍼블리시 
-        self.joint_state_to_moveit = self.create_publisher(JointState, 'joint_states', 10)   
-        # “초기 퍼블리시가 이미 이루어졌는지” 확인하기 위한 플래그 -> 초기 한번만 퍼블리시 - 렉 안걸리게 하려고
-        self._has_published_initial = False
+        # 이름 /joint_states로 하면 기존 joint_state_broadcaster와 중복
+        # /fr3/joint_set 과 같은 다른 이름으로 publish -> remapping해줘야함.
+        self.joint_state_to_moveit = self.create_publisher(JointState, '/joint_states', 10)   
+
+        # self._has_published_initial = False <-“초기 퍼블리시가 이미 이루어졌는지” 확인하기 위한 플래그 -> 초기 한번만 퍼블리시 - 렉 안걸리게 하려고
 
         # MuJoCo qpos 순서와 1:1 매핑되는 moveit_joint 이름들
         self.moveit_joint_names = []
+        self.moveit_joint_names.append("panda_finger_joint1")
         for i in range(1, 8):
             self.moveit_joint_names.append(f"panda_joint{i}")
-        self.moveit_joint_names.append("panda_finger_joint1")
-        '''
 
         # moveit -> /panda/joint_set을 받기 위한 subscription 변수
-        # moveit_sim_interface에서 moveit이 보낸 joint_set 메세지: /panda/joint_set :  현재 panda로 되어있음
+        # moveit_sim_interface에서 moveit qpos topic 이름 : /panda/joint_set :  현재 panda로 되어있음
+        # 받을때는 이름 mapping 안해도 상관없음 그냥 저장한 것의 position만 덮어쓰기
         self.latest_joint_set = None
         self.joint_set_mutex = threading.Lock()
         self.joint_set_sub = self.create_subscription(
@@ -78,15 +71,6 @@ class MujocoROSBridge(Node):
             self.jointSetCallback,
             10
         )
-
-        # MuJoCo qpos 순서와 1:1 매핑되는 moveit_joint 이름들
-        # 1에서 7까지로 되어있음. 
-        self.mujoco_joint_names = []
-        for i in range(1, 8):
-            self.mujoco_joint_names.append(f"fr3_joint{i}")
-        # panda는 joint 정보 7개만 보냄
-        # self.mujoco_joint_names.append("finger_joint1")
-        # finger_joint1으로 설정 - franka_hand_urdf.xml #finger_joint2도 있긴함
 
         self.running = True
         self.lock = threading.Lock()
@@ -139,20 +123,12 @@ class MujocoROSBridge(Node):
                 with self.lock:
                     start_time = time.perf_counter()                        
 
-                    '''기존 실행 
-                    mujoco.mj_step(self.model, self.data)  # 시뮬레이션 실행
-                    self.rc.updateModel(self.data, self.ctrl_step)                    
-                    self.data.ctrl[:self.ctrl_dof] = self.rc.compute()   
-                    '''
                     # moveit이 보낸 /panda/joint_set 메세지 존재 여부 검사 - 있으면 그 값을 qpos로 덮어쓰기
-                    
                     target_js = None
                     with self.joint_set_mutex:
-                        if self.latest_joint_set is not None:
-                        
+                        if self.latest_joint_set is not None:                        
                             target_js = self.latest_joint_set
-                            target_js.name = self.mujoco_joint_names.copy()  # moveit_joint_names를 mujoco_joint_names로 변경
-                    
+
                     if target_js is not None:
                         # moveit이 보낸 궤적 가지고 target_js.position에 들어있는 값을 qpos로 덮어쓰기
                         for i in range(self.ctrl_dof):
@@ -164,30 +140,29 @@ class MujocoROSBridge(Node):
                         self.data.qpos[8] = 0.04
                         # mujoco 시뮬레이션 한 스텝
                         mujoco.mj_step(self.model, self.data)  # 시뮬레이션 실행
-                        #self.rc.updateModel(self.data, self.ctrl_step)  #시뮬레이터 내부 상태를 DMController에 업데이트 
+                        self.rc.updateModel(self.data, self.ctrl_step)  #시뮬레이터 내부 상태를 DMController에 업데이트 
                     
                     else:
                         # moveit이 보낸 궤적이 없으면, 로봇 컨트롤러에서 계산한 값을 qpos로 덮어쓰기
+                        # 이 방법 <- moveit이 보낸 궤적이 하나라도 있었으면 이후 joint_cli 실행 불가
+                        #기존 실행방법
                         mujoco.mj_step(self.model, self.data)  # 시뮬레이션 실행
                         self.rc.updateModel(self.data, self.ctrl_step)  #시뮬레이터 내부 상태를 DMController에 업데이트                 
                         self.data.ctrl[:self.ctrl_dof] = self.rc.compute() #DMController에서 계산한 제어값을 qpos로 덮어쓰기
 
-                    '''
-                    #moveit으로 joint 정보 한번 퍼블리시
-                    if not self._has_published_initial:
-                        js_msg = JointState()
-                        js_msg.header.stamp = self.get_clock().now().to_msg()
-                        js_msg.name = self.moveit_joint_names.copy()
-                        # qpos를 position으로
-                        js_msg.position = [float(self.data.qpos[i]) for i in range(self.ctrl_dof)]
-                        # velocity 정보도 함께 포함할 수 있다면
-                        # js_msg.velocity = [float(self.data.qvel[i]) for i in range(self.ctrl_dof)]
-                        # effort 정보가 필요하면, data.sensordata나 data.qfrc_applied 등에서 가져와 채울 수 있다
-                        # js_msg.effort = [...]
-                        self.joint_state_to_moveit.publish(js_msg)
-                        self._has_published_initial = True
+                    # 추후 수정 - 여기서 이름 mapping까지 해줘야함 -> 이후 moveit으로 joint정보 publish  
+                    # moveit으로 joint 정보 한번 퍼블리시
+                    #if not self._has_published_initial:
+                    js_msg = JointState()
+                    js_msg.header.stamp = self.get_clock().now().to_msg()
+                    js_msg.name = self.moveit_joint_names.copy()
+                    # qpos를 position으로 / 0.0은 panda_finger_joint1
+                    js_msg.position = [0.0] + [float(self.data.qpos[i]) for i in range(self.ctrl_dof-1)]
+
+                    self.joint_state_to_moveit.publish(js_msg)
+                    #self._has_published_initial = True
                     
-                    '''
+                    
                     '''
                     # 3) JointState 퍼블리시 스로틀링 (매 10스텝마다 1회)
                     self._step_counter += 1
