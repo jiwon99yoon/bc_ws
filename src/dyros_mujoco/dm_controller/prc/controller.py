@@ -5,7 +5,7 @@ from std_msgs.msg import Bool
 from geometry_msgs.msg import Pose
 # from sensor_msgs.msg import JointState
 from rclpy.node import Node
-from scipy.spatial.transform import Rotation as Rs
+from scipy.spatial.transform import Rotation as R
 
 class JointMoveServer(Node):
     def __init__(self):
