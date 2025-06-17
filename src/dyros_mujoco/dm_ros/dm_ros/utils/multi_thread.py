@@ -50,7 +50,9 @@ class MujocoROSBridge(Node):
         # JoinstState publisher 생성 -> moveit으로 joint 정보 퍼블리시 
         # 이름 /joint_states로 하면 기존 joint_state_broadcaster와 중복
         # /fr3/joint_set 과 같은 다른 이름으로 publish -> remapping해줘야함.
-        self.joint_state_to_moveit = self.create_publisher(JointState, '/fr3/joint_set', 10)   
+        # demo.launch에서 ros2_control_hardware noen, use_joint_state_pubisher_gui flase로 하면 /joint_states
+        self.joint_state_to_moveit = self.create_publisher(JointState, '/joint_states', 10)   
+        #self.joint_state_to_moveit = self.create_publisher(JointState, '/fr3/joint_set', 10)   
 
         # self._has_published_initial = False <-“초기 퍼블리시가 이미 이루어졌는지” 확인하기 위한 플래그 -> 초기 한번만 퍼블리시 - 렉 안걸리게 하려고
 
@@ -140,7 +142,7 @@ class MujocoROSBridge(Node):
                         self.data.qpos[8] = 0.04
                         # mujoco 시뮬레이션 한 스텝
                         mujoco.mj_step(self.model, self.data)  # 시뮬레이션 실행
-                        self.rc.updateModel(self.data, self.ctrl_step)  #시뮬레이터 내부 상태를 DMController에 업데이트 
+                        # self.rc.updateModel(self.data, self.ctrl_step)  #시뮬레이터 내부 상태를 DMController에 업데이트 
                     
                     else:
                         # moveit이 보낸 궤적이 없으면, 로봇 컨트롤러에서 계산한 값을 qpos로 덮어쓰기
