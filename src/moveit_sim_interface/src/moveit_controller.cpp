@@ -1,4 +1,3 @@
-// 자연스럽게 mapping
 #include "moveit_controller.hpp"
 
 static Eigen::Vector3d QuinticSpline(
@@ -94,7 +93,7 @@ void ArmController::compute(const std::shared_ptr<GoalHandleJT> goal_handle)
     const auto goal = goal_handle->get_goal();
 
     rclcpp::Time currentTime;
-    double passedTime; // float -> double로 변경
+    double passedTime; 
     auto feedback = std::make_shared<JT::Feedback>();
     auto result = std::make_shared<JT::Result>();
 
@@ -120,49 +119,60 @@ void ArmController::compute(const std::shared_ptr<GoalHandleJT> goal_handle)
             Eigen::Vector3d position_now;            
             for(int j=0;j<as_joint_size;j++){ // j = joint number
                 
-                for(int i=0;i<point_size-1;i++){
-                    // 초단위 update to mujoco
-                    //  if((passedTime>=goal->trajectory.points[i].time_from_start.sec)&&(passedTime<goal->trajectory.points[i+1].time_from_start.sec))
-                    //  {
-                    //      position_now=QuinticSpline(passedTime,goal->trajectory.points[i].time_from_start.sec, goal->trajectory.points[i+1].time_from_start.sec,
-                    //      goal->trajectory.points[i].positions[j],goal->trajectory.points[i].velocities[j],goal->trajectory.points[i].accelerations[j],
-                    //      goal->trajectory.points[i+1].positions[j],goal->trajectory.points[i+1].velocities[j],goal->trajectory.points[i+1].accelerations[j]);
-                    //  }            
-                    // trajectory i 의 time_from_start (sec, nanosec)
-                    const auto &pt_i  = goal->trajectory.points[i].time_from_start;
-                    const auto &pt_i1 = goal->trajectory.points[i+1].time_from_start;
+                // 궤적 실행 중
+                if(passedTime < traj_time)
+                {
+                    for(int i=0;i<point_size-1;i++){
+                        // 초단위 update to mujoco
+                        //  if((passedTime>=goal->trajectory.points[i].time_from_start.sec)&&(passedTime<goal->trajectory.points[i+1].time_from_start.sec))
+                        //  {
+                        //      position_now=QuinticSpline(passedTime,goal->trajectory.points[i].time_from_start.sec, goal->trajectory.points[i+1].time_from_start.sec,
+                        //      goal->trajectory.points[i].positions[j],goal->trajectory.points[i].velocities[j],goal->trajectory.points[i].accelerations[j],
+                        //      goal->trajectory.points[i+1].positions[j],goal->trajectory.points[i+1].velocities[j],goal->trajectory.points[i+1].accelerations[j]);
+                        //  }            
+                        // trajectory i 의 time_from_start (sec, nanosec)
+                        const auto &pt_i  = goal->trajectory.points[i].time_from_start;
+                        const auto &pt_i1 = goal->trajectory.points[i+1].time_from_start;
 
-                    // “double t_i = sec_i + nanosec_i * 1e-9”
-                    double t_i  = static_cast<double>(pt_i.sec)
-                                 + static_cast<double>(pt_i.nanosec) * 1e-9;
-                    double t_i1 = static_cast<double>(pt_i1.sec)
-                                 + static_cast<double>(pt_i1.nanosec) * 1e-9;
-                    // passedTime(이미 소수점 이하 포함) 과 비교
-                    if (passedTime >= t_i && passedTime < t_i1) {
-                        // trajectory i, i+1 의 위치·속도·가속도 할당
-                        double pos_i   = goal->trajectory.points[i]  .positions[j];
-                        double vel_i   = goal->trajectory.points[i]  .velocities[j];
-                        double acc_i   = goal->trajectory.points[i]  .accelerations[j];
-                        double pos_i1  = goal->trajectory.points[i+1].positions[j];
-                        double vel_i1  = goal->trajectory.points[i+1].velocities[j];
-                        double acc_i1  = goal->trajectory.points[i+1].accelerations[j];
+                        // “double t_i = sec_i + nanosec_i * 1e-9”
+                        double t_i  = static_cast<double>(pt_i.sec)
+                                    + static_cast<double>(pt_i.nanosec) * 1e-9;
+                        double t_i1 = static_cast<double>(pt_i1.sec)
+                                    + static_cast<double>(pt_i1.nanosec) * 1e-9;
+                        // passedTime(이미 소수점 이하 포함) 과 비교
+                        if (passedTime >= t_i && passedTime < t_i1) {
+                            // trajectory i, i+1 의 위치·속도·가속도 할당
+                            double pos_i   = goal->trajectory.points[i]  .positions[j];
+                            double vel_i   = goal->trajectory.points[i]  .velocities[j];
+                            double acc_i   = goal->trajectory.points[i]  .accelerations[j];
+                            double pos_i1  = goal->trajectory.points[i+1].positions[j];
+                            double vel_i1  = goal->trajectory.points[i+1].velocities[j];
+                            double acc_i1  = goal->trajectory.points[i+1].accelerations[j];
 
-                        position_now = QuinticSpline(passedTime,  // 현재 시간(초 실수, nanosec 포함)
-                            t_i,         // i 구간 시작 시간
-                            t_i1,        // i+1 구간 끝 시간
-                            pos_i, vel_i, acc_i,        // pos_i, vel_i, acc_i 는 i 구간의 위치·속도·가속도
-                            pos_i1, vel_i1, acc_i1      // pos_i1, vel_i1, acc_i1 는 i+1 구간의 위치·속도·가속도
-                        );
-                        break; 
-                    }                      
+                            position_now = QuinticSpline(passedTime,  // 현재 시간(초 실수, nanosec 포함)
+                                t_i,         // i 구간 시작 시간
+                                t_i1,        // i+1 구간 끝 시간
+                                pos_i, vel_i, acc_i,        // pos_i, vel_i, acc_i 는 i 구간의 위치·속도·가속도
+                                pos_i1, vel_i1, acc_i1      // pos_i1, vel_i1, acc_i1 는 i+1 구간의 위치·속도·가속도
+                            );
+                            break; 
+                        }                      
+                    }
                 }
+                // 궤적 완료 후 - 마지막 위치 유지 (NEW!)
+                else {
+                    const auto& final_point = goal->trajectory.points.back();
+                    position_now << final_point.positions[j], 0.0, 0.0; // 위치만, 속도/가속도는 0
+                }
+
                 feedback->joint_names = goal->trajectory.joint_names;                
                 feedback->actual.positions[j] = position_now(0);                
                 feedback->actual.velocities[j] = position_now(1);
                 feedback->actual.accelerations[j] = position_now(2);
 
                 joint_command_msg.position[j]=position_now(0);
-            }            
+            }
+                   
             joint_command_pub->publish(joint_command_msg); //기존 for loop에서 publish를 하지 않고, 계산된 결과 pub
             feedback -> actual.time_from_start= currentTime - goal_start_time;
             feedback -> header.stamp.sec = feedback_header_stamp_;            
@@ -176,6 +186,7 @@ void ArmController::compute(const std::shared_ptr<GoalHandleJT> goal_handle)
             result->error_code = 0; // 0 : SUCCESSFUL
             goal_handle->succeed(result);
             RCLCPP_INFO(this->get_logger(), "Arm goal succeeded");
+            return; // 추가 : 성공 후 즉시 종료
         }
         loop_rate.sleep(); //100hz 이상 올라가지않게 제어
     }

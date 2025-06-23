@@ -14,27 +14,48 @@
 # 기존 demo.launch.py로만 실행해도 됨
 # 하지만 이 경우 moveit 내부 joint_state_broadcaster가 publish하는 /joint_states와 중복됨
 
+# import os
+# from ament_index_python.packages import get_package_share_directory
+# from launch import LaunchDescription
+# from launch.actions import GroupAction, IncludeLaunchDescription
+# from launch.launch_description_sources import PythonLaunchDescriptionSource
+# from launch_ros.actions import SetRemap
+
+# def generate_launch_description():
+#     pkg_share = get_package_share_directory('panda_moveit_config')
+#     demo = IncludeLaunchDescription(
+#         PythonLaunchDescriptionSource(
+#             os.path.join(pkg_share, 'launch', 'demo.launch.py')
+#         )
+#     )
+
+#     # 같은 스코프 안에 있는 모든 노드(/joint_states 구독자)에 remap을 적용
+#     wrapper = GroupAction(
+#         actions=[
+#             SetRemap(src='/joint_states', dst='/fr3/joint_set'),
+#             demo
+#         ]
+#     )
+
+#     return LaunchDescription([wrapper])
+
 import os
-from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import GroupAction, IncludeLaunchDescription
+from launch.actions import IncludeLaunchDescription
 from launch.launch_description_sources import PythonLaunchDescriptionSource
-from launch_ros.actions import SetRemap
+from ament_index_python.packages import get_package_share_directory
 
 def generate_launch_description():
-    pkg_share = get_package_share_directory('panda_moveit_config')
-    demo = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(
-            os.path.join(pkg_share, 'launch', 'demo.launch.py')
+    pkg = get_package_share_directory('panda_moveit_config')
+
+    return LaunchDescription([
+        IncludeLaunchDescription(
+            PythonLaunchDescriptionSource(os.path.join(pkg, 'launch', 'rsp.launch.py'))
+        ),
+        IncludeLaunchDescription(
+            PythonLaunchDescriptionSource(os.path.join(pkg, 'launch', 'move_group.launch.py'))
+        ),
+        IncludeLaunchDescription(
+            PythonLaunchDescriptionSource(os.path.join(pkg, 'launch', 'moveit_rviz.launch.py'))
         )
-    )
-
-    # 같은 스코프 안에 있는 모든 노드(/joint_states 구독자)에 remap을 적용
-    wrapper = GroupAction(
-        actions=[
-            SetRemap(src='/joint_states', dst='/fr3/joint_set'),
-            demo
-        ]
-    )
-
-    return LaunchDescription([wrapper])
+    ])

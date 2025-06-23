@@ -36,6 +36,7 @@ setup(
         'console_scripts': [
             'fr3_test = dm_ros.fr3_test:main',
             'fr3_free = dm_ros.fr3_free:main',
+            'fr3_free_interface = dm_ros.fr3_free_interface:main',
         ],
     },
 )

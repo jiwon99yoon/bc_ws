@@ -44,19 +44,19 @@
       <collision>
         <origin xyz="0 0 -0.1915" rpy="0 0 0"/>
         <geometry>
-          <cylinder radius="${0.06+safety_distance}" length="0.2830" />
+          <cylinder radius="${0.05+safety_distance}" length="0.2830" />
         </geometry>
       </collision>
       <collision>
         <origin xyz="0 0 -0.333" rpy="0 0 0"/>
         <geometry>
-          <sphere radius="${0.06+safety_distance}" />
+          <sphere radius="${0.05+safety_distance}" />
         </geometry>
       </collision>
       <collision>
         <origin xyz="0 0 -0.05" rpy="0 0 0"/>
         <geometry>
-          <sphere radius="${0.06+safety_distance}" />
+          <sphere radius="${0.05+safety_distance}" />
         </geometry>
       </collision>
     </link>
